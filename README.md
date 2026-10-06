@@ -79,6 +79,8 @@ These verify main findings, ASCII technical evidence, page numbers, title, langu
 
 ## Limitations
 
+See [SECURITY.md](SECURITY.md) for the security review, application limits, and mandatory hosting-level isolation before public deployment. The interface displays V0.3. Scans and exports now share one isolated worker slot, with IP quotas of five scans and twenty exports per ten minutes. Only public HTTP/HTTPS targets on ports 80/443 are accepted. Resource limits may reject complex pages; rejected scans do not imply accessibility compliance.
+
 - One rendered page state is scanned without login or user interaction. Keyboard behavior, content meaning, and other accessibility concerns require manual review.
 - All default axe rules run, including best practices. Issue totals count violated rules. Affected-element totals count occurrences across rules, not unique elements.
 - Manual-review totals reflect axe's incomplete results, vary by page, and do not form a comprehensive manual audit checklist.

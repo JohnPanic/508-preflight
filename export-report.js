@@ -1,7 +1,8 @@
-const { chromium } = require('playwright');
+const { launchBrowser } = require('./browser-runtime');
 const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const tags = new Set(['section', 'article', 'aside', 'h2', 'h3', 'p', 'span', 'strong', 'details', 'summary', 'pre', 'a', 'div']);
-function content(node, depth = 0) {
+function content(node, depth = 0, budget = { nodes: 0 }) {
+  if (++budget.nodes > 100000) throw new Error('Report content limit exceeded.');
   if (depth > 30) throw new Error('Report nesting is too deep.');
   if (typeof node === 'string') return escape(node);
   if (!node || !tags.has(node.tag) || !Array.isArray(node.children)) throw new Error('Invalid report content.');
@@ -9,7 +10,7 @@ function content(node, depth = 0) {
   let attrs = classes ? ` class="${classes}"` : '';
   if (node.tag === 'details') attrs += ' open';
   if (node.tag === 'a' && typeof node.href === 'string' && /^https:\/\//.test(node.href)) attrs += ` href="${escape(node.href)}" rel="noopener noreferrer"`;
-  return `<${node.tag}${attrs}>${node.children.map(n => content(n, depth + 1)).join('')}</${node.tag}>`;
+  return `<${node.tag}${attrs}>${node.children.map(n => content(n, depth + 1, budget)).join('')}</${node.tag}>`;
 }
 const css = `
 *{box-sizing:border-box}body{margin:0;background:#fff;color:#17252b;font:15px/1.55 Arial,sans-serif}main{max-width:900px;margin:40px auto;padding:0 28px}h1{font-size:28px;line-height:1.2}h2{font-size:21px;margin:28px 0 12px}h3{font-size:17px;line-height:1.35;margin:8px 0 14px}p{overflow-wrap:anywhere}header{border-bottom:2px solid #234d5c;padding-bottom:18px}.metadata p{margin:5px 0}.notice,.start-here{background:#edf3f5;border-left:3px solid #386272;padding:12px 16px;margin:20px 0}.start-here h2{font-size:16px;margin:0}.start-here p{margin:6px 0}.finding{border:1px solid #cbd4d9;border-radius:6px;padding:18px;margin:14px 0;break-inside:avoid}.finding-field strong{display:block;font-size:13px}.finding-field span{display:block}.badge{display:inline-block;padding:3px 8px;border:1px solid #aab9c2;border-radius:4px;font-size:12px}.severity-critical,.severity-serious{background:#fff0ef;color:#8b2520}.severity-moderate{background:#fff6e6;color:#76500b}.severity-minor{background:#eef3f5;color:#234d5c}.meta{font-size:13px;color:#48565d}details{border-top:1px solid #cbd4d9;margin-top:18px;padding-top:12px}summary{font-weight:bold;cursor:pointer}pre{font:11px/1.5 Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;background:#f3f5f6;padding:10px;break-inside:auto}a{color:#18536d;overflow-wrap:anywhere}h2,h3,summary,strong{break-after:avoid}p{orphans:3;widows:3}footer{margin-top:24px;border-top:1px solid #cbd4d9;padding-top:12px;font-size:12px}
@@ -20,14 +21,18 @@ const printFixes = '<style>@media print{.finding.long-finding{break-inside:auto}
 function buildReport(payload) {
   if (!payload || typeof payload.url !== 'string' || typeof payload.axeVersion !== 'string' || !Array.isArray(payload.content)) throw new Error('Invalid report.');
   const date = new Date(payload.scannedAt);
+  const budget = { nodes: 0 };
+  if (Buffer.byteLength(JSON.stringify(payload)) > 20 * 1024 * 1024) throw new Error('Report size limit exceeded.');
   if (Number.isNaN(date.getTime())) throw new Error('Invalid scan date.');
+  if (payload.url.length > 2048 || payload.axeVersion.length > 100 || (payload.scanTime && (typeof payload.scanTime !== 'string' || payload.scanTime.length > 200))) throw new Error('Invalid report metadata.');
   for (const key of ['issueCount', 'affectedElementCount', 'manualReviewCount']) if (!Number.isSafeInteger(payload[key]) || payload[key] < 0) throw new Error('Invalid report count.');
   const disclaimer = '508 Preflight provides automated accessibility findings and identifies items requiring human review. It does not certify Section 508 or WCAG compliance.';
-  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>508 Preflight — Accessibility Report</title><style>${css}</style></head><body><main><header><h1>508 Preflight — Accessibility Report</h1><div class="metadata"><p><strong>Scanned URL:</strong> ${escape(payload.url)}</p><p><strong>Scan date and time:</strong> ${escape(payload.scanTime || date.toISOString())}</p><p><strong>axe-core version:</strong> ${escape(payload.axeVersion)}</p><p><strong>Total issues found:</strong> ${payload.issueCount}</p><p><strong>Total affected element occurrences:</strong> ${payload.affectedElementCount}</p><p><strong>Manual-review rules:</strong> ${payload.manualReviewCount}</p></div></header><p class="notice">${disclaimer}</p>${payload.content.map(n => content(n)).join('')}<footer>${disclaimer}</footer></main></body></html>`;
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>508 Preflight — Accessibility Report</title><style>${css}</style></head><body><main><header><h1>508 Preflight — Accessibility Report</h1><div class="metadata"><p><strong>Scanned URL:</strong> ${escape(payload.url)}</p><p><strong>Scan date and time:</strong> ${escape(payload.scanTime || date.toISOString())}</p><p><strong>axe-core version:</strong> ${escape(payload.axeVersion)}</p><p><strong>Total issues found:</strong> ${payload.issueCount}</p><p><strong>Total affected element occurrences:</strong> ${payload.affectedElementCount}</p><p><strong>Manual-review rules:</strong> ${payload.manualReviewCount}</p></div></header><p class="notice">${disclaimer}</p>${payload.content.map(n => content(n, 0, budget)).join('')}<footer>${disclaimer}</footer></main></body></html>`;
+  if (Buffer.byteLength(html) > 40 * 1024 * 1024) throw new Error('Report size limit exceeded.');
   return { html: html.replace('</head>', `${printFixes}</head>`), filename: `508-preflight-report-${date.toISOString().slice(0, 10)}` };
 }
 async function reportPdf(html) {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchBrowser();
   try {
     const context = await browser.newContext({ javaScriptEnabled: false, serviceWorkers: 'block' });
     await context.route('**/*', route => route.abort());
@@ -121,4 +126,3 @@ async function reportPdf(html) {
   } finally { await browser.close(); }
 }
 module.exports = { buildReport, reportPdf };
-
