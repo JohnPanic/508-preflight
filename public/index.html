@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>508 Preflight</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body><main>
+<header><p class="eyebrow">ACCESSIBILITY CHECK · V0.1</p><h1>508 Preflight</h1><p>Check a public webpage for automated accessibility findings.</p></header>
+<p class="notice">Automated preflight only. This does not certify Section 508 compliance.</p>
+<form id="scan-form"><label for="url">Public webpage URL</label><div class="input-row"><input id="url" name="url" type="url" placeholder="https://example.com" required maxlength="2048"><button type="submit">Run Preflight</button></div></form>
+<p id="status" role="status" aria-live="polite"></p>
+<section id="report" aria-label="Accessibility findings" hidden></section>
+<footer>One page, one rendered state. Manual accessibility review is still required.</footer>
+</main></body></html>

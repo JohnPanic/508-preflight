@@ -1,0 +1,1 @@
+{"name":"508-preflight","version":"0.3.0","private":true,"scripts":{"start":"node server.js","test":"node --test test/*.test.js","install:browser":"node install-browser.js"},"engines":{"node":">=22"},"dependencies":{"axe-core":"^4.13.0","express":"^5.2.1","ipaddr.js":"^2.5.0","playwright":"^1.63.0"}}
